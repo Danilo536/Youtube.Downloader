@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Youtube Downloader ohne ffmpeg (MP3 ohne Konvertierung)</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet" />
+  <style>#progress-container {display:none; margin-top:20px;}</style>
+</head>
+<body>
+<div class="container mt-5">
+  <h1>Youtube Downloader ohne ffmpeg</h1>
+  {% with messages = get_flashed_messages() %}
+    {% if messages %}
+      <div class="alert alert-info">
+        {% for message in messages %}
+          <div>{{ message }}</div>
+        {% endfor %}
+      </div>
+    {% endif %}
+  {% endwith %}
+  <form id="download-form" method="post" action="{{ url_for('start_download') }}">
+    <div class="mb-3">
+      <label for="url" class="form-label">URL (Video oder Playlist)</label>
+      <input type="url" class="form-control" id="url" name="url" required autofocus placeholder="https://www.youtube.com/..." />
+    </div>
+    <div class="mb-3">
+      <label for="format" class="form-label">Format</label>
+      <select class="form-select" id="format" name="format">
+        <option value="mp3">MP3 (ohne ffmpeg, reine Umbenennung)</option>
+        <option value="mp4">MP4 (Video)</option>
+      </select>
+    </div>
+    <div class="mb-3">
+      <label for="download_type" class="form-label">Download-Typ</label>
+      <select class="form-select" id="download_type" name="download_type">
+        <option value="video">Einzelnes Video</option>
+        <option value="playlist">Playlist</option>
+      </select>
+    </div>
+    <div class="mb-3">
+      <label for="path" class="form-label">Speicherort (voller Pfad)</label>
+      <input type="text" class="form-control" id="path" name="path" required value="{{ default_path }}" />
+    </div>
+    <div class="form-check mb-3">
+      <input class="form-check-input" type="checkbox" id="new_folder" name="new_folder" value="yes" onchange="toggleFolderName()" />
+      <label class="form-check-label" for="new_folder">Neuen Ordner erstellen?</label>
+    </div>
+    <div class="mb-3" id="folder_name_div" style="display:none;">
+      <label for="folder_name" class="form-label">Name des neuen Ordners</label>
+      <input type="text" class="form-control" id="folder_name" name="folder_name" placeholder="Name des Ordners" />
+    </div>
+    <button type="submit" class="btn btn-primary">Download starten</button>
+  </form>
+
+  <div id="progress-container">
+    <h5>Download Fortschritt</h5>
+    <div class="progress">
+      <div id="progress-bar" class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" style="width:0%"></div>
+    </div>
+    <p id="progress-text"></p>
+  </div>
+</div>
+
+<script>
+function toggleFolderName() {
+  const checkbox = document.getElementById('new_folder');
+  const folderNameDiv = document.getElementById('folder_name_div');
+  folderNameDiv.style.display = checkbox.checked ? 'block' : 'none';
+}
+
+const form = document.getElementById('download-form');
+const progressContainer = document.getElementById('progress-container');
+const progressBar = document.getElementById('progress-bar');
+const progressText = document.getElementById('progress-text');
+
+form.addEventListener('submit', function(event){
+  event.preventDefault();
+  progressContainer.style.display = 'block';
+  progressBar.style.width = '0%';
+  progressText.textContent = 'Starte Download...';
+
+  const formData = new FormData(form);
+  fetch('{{ url_for("start_download") }}', {
+    method: 'POST',
+    body: formData
+  }).then(response => {
+    if (!response.ok) throw new Error('Fehler beim Starten des Downloads');
+    pollProgress();
+  }).catch(err => {
+    alert(err);
+    progressContainer.style.display = 'none';
+  });
+});
+
+function pollProgress(){
+  fetch('{{ url_for("get_progress") }}')
+    .then(response => response.json())
+    .then(data => {
+      if(data.error){
+        progressText.textContent = data.error;
+        progressBar.style.width = '0%';
+        return;
+      }
+      progressBar.style.width = data.percent + '%';
+      progressText.textContent = data.status;
+
+      if(!data.finished){
+        setTimeout(pollProgress, 1000);
+      } else {
+        progressText.textContent += " - Fertig!";
+        progressBar.classList.remove('progress-bar-animated');
+        progressBar.classList.add('bg-success');
+      }
+    })
+    .catch(() => {
+      progressText.textContent = "Fehler beim Abrufen des Fortschritts";
+    });
+}
+</script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
